@@ -17,7 +17,7 @@ terraform {
 
     azuredevops = {
       source  = "microsoft/azuredevops"
-      version = "~> 0.1.0"
+      version = "~> 0.2.0"
     }
   }
 }
@@ -28,7 +28,9 @@ provider "azurerm" {
 
 provider "azuread" {}
 
-provider "azuredevops" {}
+provider "azuredevops" {
+  org_service_url = format("https://dev.azure.com/%s", var.azdo_organization)
+}
 
 locals {
   lab_name = random_string.name.result
@@ -61,6 +63,19 @@ resource "azuredevops_project" "this" {
   version_control = "Git"
 }
 
+resource "azuredevops_user_entitlement" "user" {
+  principal_name = azuread_user.this.user_principal_name
+}
+
+resource "azuredevops_group" "project_members" {
+  scope        = azuredevops_project.this.id
+  display_name = "Members"
+
+  members = [
+    azuredevops_user_entitlement.user.descriptor
+  ]
+}
+
 resource "azuredevops_serviceendpoint_github" "github_serviceendpoint" {
   project_id            = azuredevops_project.this.id
   service_endpoint_name = "GitHub"
@@ -70,20 +85,44 @@ resource "azuredevops_serviceendpoint_github" "github_serviceendpoint" {
   }
 }
 
-resource "azuredevops_build_definition" "tf" {
-  project_id          =  azuredevops_project.this.id
-  name                =  "Sample Build"
+resource "azuredevops_build_definition" "this" {
+  project_id = azuredevops_project.this.id
+  name       = "Sample Build"
 
   ci_trigger {
-    use_yaml  =   true
+    use_yaml = true
   }
 
   repository {
-    repo_type             =   "GitHub"
-    repo_id               =   join("/", [var.github_org_name, var.github_repo_name])
-    branch_name           =   "main"
-    yml_path              =   "azure-pipelines.yml"
-    service_connection_id =   azuredevops_serviceendpoint_github.github_serviceendpoint.id
+    repo_type             = "GitHub"
+    repo_id               = join("/", [var.github_org_name, var.github_repo_name])
+    branch_name           = "main"
+    yml_path              = "azure-pipelines.yml"
+    service_connection_id = azuredevops_serviceendpoint_github.github_serviceendpoint.id
+  }
+}
+
+##
+# Azure DevOps permissions
+##
+resource "azuredevops_project_permissions" "project_perms" {
+  project_id = azuredevops_project.this.id
+  principal  = azuredevops_group.project_members.id
+  permissions = {
+    GENERIC_READ = "Allow"
+    // etc
+  }
+}
+
+resource "azuredevops_build_definition_permissions" "build_perms" {
+  project_id = azuredevops_project.this.id
+  principal  = azuredevops_group.project_members.id
+
+  build_definition_id = azuredevops_build_definition.this.id
+
+  permissions = {
+    ViewBuilds = "Allow"
+    # etc
   }
 }
 
@@ -130,11 +169,13 @@ resource "azurerm_key_vault" "this" {
 # TODO: narrow the permissions
 ##
 resource "azurerm_role_definition" "this" {
-  name        = format("role-lab-%s", local.lab_name)
-  scope       = data.azurerm_subscription.primary.id
+  name  = format("role-lab-%s", local.lab_name)
+  scope = data.azurerm_subscription.primary.id
 
   permissions {
-    actions     = ["*"]
+    actions = [
+      "Microsoft.KeyVault/*",
+    ]
     not_actions = []
   }
 
@@ -144,7 +185,7 @@ resource "azurerm_role_definition" "this" {
 }
 
 resource "azurerm_role_assignment" "this" {
-  scope                = data.azurerm_subscription.primary.id
+  scope                = azurerm_key_vault.this.id
   role_definition_name = azurerm_role_definition.this.name
   principal_id         = azuread_user.this.id
 }

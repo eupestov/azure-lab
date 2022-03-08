@@ -7,10 +7,8 @@ An example module and terragrunt configuration for Azure DevOps lab.
 - a new Azure DevOps project with a sample pipeline
 - an Azure KeyVault
 - a new role assigned to the user
-
-## TODO
 - the correct permissions so that the user can only access Azure DevOps and
-Azure KeyVault, not other resources
+Azure KeyVault, not other resources (the actual permission list may be corrected based on the specific use case)
 
 ## Ho to run
 

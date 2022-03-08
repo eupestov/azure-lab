@@ -10,6 +10,6 @@ output "user_password" {
 }
 
 output "devops_project_url" {
-  value       = format("https://dev.azure.com/%s/%s", var.github_org_name, azuredevops_project.this.name)
+  value       = format("https://dev.azure.com/%s/%s", var.azdo_organization, azuredevops_project.this.name)
   description = "The DevOps project URL"
 }
