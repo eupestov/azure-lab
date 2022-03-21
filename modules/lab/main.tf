@@ -121,7 +121,8 @@ resource "azuredevops_build_definition_permissions" "build_perms" {
   build_definition_id = azuredevops_build_definition.this.id
 
   permissions = {
-    ViewBuilds = "Allow"
+    ViewBuilds          = "Allow"
+    ViewBuildDefinition = "Allow"
     # etc
   }
 }
